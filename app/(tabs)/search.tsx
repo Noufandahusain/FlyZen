@@ -1,11 +1,18 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { ArrowLeft } from 'lucide-react-native';
 import SearchForm from '@/components/search/SearchForm';
-import FlightList from '@/components/search/FlightList';
+import FlightCard from '@/components/search/FlightCard';
 import { searchFlights } from '@/services/api';
 import { Flight } from '@/types';
 import EmptyState from '@/components/common/EmptyState';
@@ -21,7 +28,7 @@ export default function SearchScreen() {
     setLoading(true);
     setError(null);
     setSearched(true);
-    
+
     try {
       const results = await searchFlights(searchParams);
       setFlights(results);
@@ -33,54 +40,98 @@ export default function SearchScreen() {
     }
   };
 
+  const renderResults = () => {
+    if (loading) {
+      return (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Searching for the best flights...
+          </Text>
+        </View>
+      );
+    }
+
+    if (error) {
+      return (
+        <View style={styles.centerContainer}>
+          <Text style={[styles.errorText, { color: colors.error }]}>
+            {error}
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={() => handleSearch({})}
+          >
+            <Text style={[styles.retryButtonText, { color: colors.white }]}>
+              Try Again
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (searched && flights.length === 0) {
+      return (
+        <View style={styles.centerContainer}>
+          <EmptyState
+            icon="search"
+            title="No flights found"
+            message="Try adjusting your search criteria"
+          />
+        </View>
+      );
+    }
+
+    if (flights.length > 0) {
+      return (
+        <>
+          <Text style={[styles.resultsText, { color: colors.text }]}>
+            {flights.length} flights found
+          </Text>
+          {flights.map((flight) => (
+            <FlightCard
+              key={flight.id}
+              flight={flight}
+              onPress={() =>
+                router.push({
+                  pathname: '/flight/[id]' as const,
+                  params: { id: flight.id.toString() },
+                })
+              }
+            />
+          ))}
+        </>
+      );
+    }
+
+    return null;
+  };
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['top']}
+    >
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Find Flights</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          Find Flights
+        </Text>
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <SearchForm onSearch={handleSearch} />
-        
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              Searching for the best flights...
-            </Text>
-          </View>
-        ) : searched ? (
-          <>
-            {error ? (
-              <View style={styles.errorContainer}>
-                <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-                <TouchableOpacity 
-                  style={[styles.retryButton, { backgroundColor: colors.primary }]}
-                  onPress={() => handleSearch}
-                >
-                  <Text style={[styles.retryButtonText, { color: colors.white }]}>
-                    Try Again
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : flights.length > 0 ? (
-              <FlightList flights={flights} />
-            ) : (
-              <EmptyState
-                icon="search"
-                title="No flights found"
-                message="Try adjusting your search criteria"
-              />
-            )}
-          </>
-        ) : null}
+        {renderResults()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -111,13 +162,17 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
-  content: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingBottom: 24,
   },
-  loadingContainer: {
+  centerContainer: {
+    padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    minHeight: 300,
   },
   loadingText: {
     fontFamily: 'Inter-Regular',
@@ -125,9 +180,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
   },
-  errorContainer: {
-    padding: 24,
-    alignItems: 'center',
+  resultsText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 12,
   },
   errorText: {
     fontFamily: 'Inter-Regular',
@@ -143,5 +201,5 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontFamily: 'Inter-Medium',
     fontSize: 16,
-  }
+  },
 });

@@ -5,13 +5,17 @@ import FlightCard from './FlightCard';
 
 type FlightListProps = {
   flights: Flight[];
+  contentContainerStyle?: any;
 };
 
-export default function FlightList({ flights }: FlightListProps) {
+export default function FlightList({
+  flights,
+  contentContainerStyle,
+}: FlightListProps) {
   const handleFlightPress = (flight: Flight) => {
     router.push({
-      pathname: `/flight/${flight.id}`,
-      params: { flightId: flight.id.toString() }
+      pathname: '/flight/[id]' as const,
+      params: { id: flight.id.toString() },
     });
   };
 
@@ -22,12 +26,9 @@ export default function FlightList({ flights }: FlightListProps) {
         data={flights}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <FlightCard 
-            flight={item} 
-            onPress={() => handleFlightPress(item)}
-          />
+          <FlightCard flight={item} onPress={() => handleFlightPress(item)} />
         )}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, contentContainerStyle]}
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -36,6 +37,7 @@ export default function FlightList({ flights }: FlightListProps) {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     paddingHorizontal: 16,
   },
   resultsText: {
@@ -45,5 +47,5 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 16,
-  }
+  },
 });

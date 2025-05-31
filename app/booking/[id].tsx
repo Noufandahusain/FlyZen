@@ -1,15 +1,33 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+  InteractionManager,
+  BackHandler,
+  Modal,
+  Pressable,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ArrowLeft, CalendarClock, Plane, Users, CreditCard as Edit2, Trash2 } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  CalendarClock,
+  Plane,
+  Users,
+  CreditCard as Edit2,
+  Trash2,
+} from 'lucide-react-native';
 import { getBookingById, cancelBooking } from '@/services/api';
 import { BookingDetail } from '@/types';
 import { format } from 'date-fns';
 import BookingStatusBadge from '@/components/bookings/BookingStatusBadge';
-import AlertDialog from '@/components/common/AlertDialog';
 
 export default function BookingDetailScreen() {
   const { colors } = useTheme();
@@ -26,10 +44,26 @@ export default function BookingDetailScreen() {
     }
   }, [id]);
 
+  // Handle back button press
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (cancelConfirmVisible) {
+          setCancelConfirmVisible(false);
+          return true;
+        }
+        return false;
+      }
+    );
+
+    return () => backHandler.remove();
+  }, [cancelConfirmVisible]);
+
   const loadBooking = async (bookingId: string) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const data = await getBookingById(bookingId);
       setBooking(data);
@@ -41,21 +75,19 @@ export default function BookingDetailScreen() {
     }
   };
 
-  const handleCancelBooking = async () => {
+  const handleConfirmCancel = async () => {
     if (!id) return;
-    
-    setCancelling(true);
-    
+
     try {
+      setCancelling(true);
       await cancelBooking(id);
-      setCancelConfirmVisible(false);
-      // Reload the booking to show updated status
-      await loadBooking(id);
+      router.push('/(tabs)/bookings');
     } catch (err) {
       setError('Failed to cancel booking. Please try again.');
       console.error(err);
     } finally {
       setCancelling(false);
+      setCancelConfirmVisible(false);
     }
   };
 
@@ -69,15 +101,19 @@ export default function BookingDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Booking Details</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Booking Details
+          </Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
@@ -92,22 +128,26 @@ export default function BookingDetailScreen() {
 
   if (error || !booking) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Booking Details</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Booking Details
+          </Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.error }]}>
             {error || 'Booking not found'}
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
             onPress={() => id && loadBooking(id)}
           >
@@ -121,18 +161,23 @@ export default function BookingDetailScreen() {
   }
 
   const canCancel = booking.status !== 'CANCELLED';
-  const canEdit = booking.status === 'PENDING' || booking.status === 'CONFIRMED';
+  const canEdit =
+    booking.status === 'PENDING' || booking.status === 'CONFIRMED';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Booking Details</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          Booking Details
+        </Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -143,7 +188,9 @@ export default function BookingDetailScreen() {
               <Text style={[styles.flightCode, { color: colors.text }]}>
                 {booking.flight_details.flight_code}
               </Text>
-              <Text style={[styles.airlineName, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.airlineName, { color: colors.textSecondary }]}
+              >
                 {booking.flight_details.airline_name}
               </Text>
             </View>
@@ -158,16 +205,27 @@ export default function BookingDetailScreen() {
                 {booking.flight_details.origin_city}
               </Text>
               <Text style={[styles.time, { color: colors.text }]}>
-                {format(new Date(booking.flight_details.departure_datetime), 'h:mm a')}
+                {format(
+                  new Date(booking.flight_details.departure_datetime),
+                  'h:mm a'
+                )}
               </Text>
             </View>
-            
+
             <View style={styles.flightPathView}>
-              <View style={[styles.circle, { backgroundColor: colors.primary }]} />
+              <View
+                style={[styles.circle, { backgroundColor: colors.primary }]}
+              />
               <View style={[styles.line, { backgroundColor: colors.border }]} />
-              <Plane size={20} color={colors.primary} style={{ transform: [{ rotate: '45deg' }] }} />
+              <Plane
+                size={20}
+                color={colors.primary}
+                style={{ transform: [{ rotate: '45deg' }] }}
+              />
               <View style={[styles.line, { backgroundColor: colors.border }]} />
-              <View style={[styles.circle, { backgroundColor: colors.primary }]} />
+              <View
+                style={[styles.circle, { backgroundColor: colors.primary }]}
+              />
             </View>
 
             <View style={styles.locationColumn}>
@@ -175,7 +233,10 @@ export default function BookingDetailScreen() {
                 {booking.flight_details.destination_city}
               </Text>
               <Text style={[styles.time, { color: colors.text }]}>
-                {format(new Date(booking.flight_details.arrival_datetime), 'h:mm a')}
+                {format(
+                  new Date(booking.flight_details.arrival_datetime),
+                  'h:mm a'
+                )}
               </Text>
             </View>
           </View>
@@ -183,37 +244,56 @@ export default function BookingDetailScreen() {
           <View style={styles.detailsContainer}>
             <View style={styles.detailRow}>
               <CalendarClock size={18} color={colors.textSecondary} />
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Date:</Text>
+              <Text
+                style={[styles.detailLabel, { color: colors.textSecondary }]}
+              >
+                Date:
+              </Text>
               <Text style={[styles.detailValue, { color: colors.text }]}>
-                {format(new Date(booking.flight_details.departure_datetime), 'EEEE, MMMM d, yyyy')}
+                {format(
+                  new Date(booking.flight_details.departure_datetime),
+                  'EEEE, MMMM d, yyyy'
+                )}
               </Text>
             </View>
             <View style={styles.detailRow}>
               <Users size={18} color={colors.textSecondary} />
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Passengers:</Text>
+              <Text
+                style={[styles.detailLabel, { color: colors.textSecondary }]}
+              >
+                Passengers:
+              </Text>
               <Text style={[styles.detailValue, { color: colors.text }]}>
-                {booking.num_tickets} {booking.num_tickets === 1 ? 'passenger' : 'passengers'}
+                {booking.num_tickets}{' '}
+                {booking.num_tickets === 1 ? 'passenger' : 'passengers'}
               </Text>
             </View>
           </View>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Price Details</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Price Details
+          </Text>
           <View style={[styles.priceRow, { borderBottomColor: colors.border }]}>
             <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-              Base Fare ({booking.num_tickets} {booking.num_tickets === 1 ? 'ticket' : 'tickets'})
+              Base Fare ({booking.num_tickets}{' '}
+              {booking.num_tickets === 1 ? 'ticket' : 'tickets'})
             </Text>
             <Text style={[styles.priceValue, { color: colors.text }]}>
               ${booking.flight_details.price * booking.num_tickets}
             </Text>
           </View>
           <View style={[styles.priceRow, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Taxes & Fees</Text>
+            <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
+              Taxes & Fees
+            </Text>
             <Text style={[styles.priceValue, { color: colors.text }]}>$35</Text>
           </View>
           <View style={styles.priceRow}>
-            <Text style={[styles.totalLabel, { color: colors.text }]}>Total</Text>
+            <Text style={[styles.totalLabel, { color: colors.text }]}>
+              Total
+            </Text>
             <Text style={[styles.totalValue, { color: colors.primary }]}>
               ${booking.total_price}
             </Text>
@@ -221,24 +301,33 @@ export default function BookingDetailScreen() {
         </View>
 
         {booking.passenger_details && booking.passenger_details.length > 0 && (
-          <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Passenger Information</Text>
+          <View
+            style={[styles.card, { backgroundColor: colors.cardBackground }]}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Passenger Information
+            </Text>
             {booking.passenger_details.map((passenger, index) => (
-              <View 
-                key={index} 
+              <View
+                key={index}
                 style={[
-                  styles.passengerRow, 
+                  styles.passengerRow,
                   index < booking.passenger_details!.length - 1 && {
                     borderBottomWidth: StyleSheet.hairlineWidth,
                     borderBottomColor: colors.border,
-                  }
+                  },
                 ]}
               >
                 <Text style={[styles.passengerName, { color: colors.text }]}>
                   {passenger.name}
                 </Text>
                 {passenger.seat_preference && (
-                  <Text style={[styles.seatPreference, { color: colors.textSecondary }]}>
+                  <Text
+                    style={[
+                      styles.seatPreference,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
                     {passenger.seat_preference} seat
                   </Text>
                 )}
@@ -249,7 +338,7 @@ export default function BookingDetailScreen() {
 
         <View style={styles.actionsContainer}>
           {canEdit && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.primary }]}
               onPress={() => router.push(`/booking/edit/${id}`)}
             >
@@ -259,12 +348,12 @@ export default function BookingDetailScreen() {
               </Text>
             </TouchableOpacity>
           )}
-          
+
           {canCancel && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
-                styles.actionButton, 
-                { backgroundColor: colors.error + '15' }
+                styles.actionButton,
+                { backgroundColor: colors.error + '15' },
               ]}
               onPress={() => setCancelConfirmVisible(true)}
             >
@@ -277,17 +366,62 @@ export default function BookingDetailScreen() {
         </View>
       </ScrollView>
 
-      <AlertDialog
+      <Modal
         visible={cancelConfirmVisible}
-        title="Cancel Booking"
-        message="Are you sure you want to cancel this booking? This action cannot be undone."
-        confirmText="Yes, Cancel"
-        cancelText="No, Keep It"
-        confirmButtonColor={colors.error}
-        loading={cancelling}
-        onConfirm={handleCancelBooking}
-        onCancel={() => setCancelConfirmVisible(false)}
-      />
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCancelConfirmVisible(false)}
+      >
+        <Pressable
+          style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+          onPress={() => setCancelConfirmVisible(false)}
+        >
+          <Pressable
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBackground },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Cancel Booking
+            </Text>
+            <Text
+              style={[styles.modalMessage, { color: colors.textSecondary }]}
+            >
+              Are you sure you want to cancel this booking? This action cannot
+              be undone.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: colors.background },
+                ]}
+                onPress={() => setCancelConfirmVisible(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>
+                  No, Keep It
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: colors.error }]}
+                onPress={handleConfirmCancel}
+                disabled={cancelling}
+              >
+                {cancelling ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text
+                    style={[styles.modalButtonText, { color: colors.white }]}
+                  >
+                    Yes, Cancel
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -493,5 +627,46 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontFamily: 'Inter-Medium',
     fontSize: 16,
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    borderRadius: 12,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontFamily: 'Roboto-Medium',
+    fontSize: 20,
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 16,
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 16,
+  },
 });

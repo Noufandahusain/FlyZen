@@ -1,12 +1,24 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+  Platform,
+  InteractionManager,
+  BackHandler,
+  Modal,
+  Pressable,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { ArrowLeft, Users, Save } from 'lucide-react-native';
 import { getBookingById, updateBooking } from '@/services/api';
 import { BookingDetail, PassengerDetail } from '@/types';
-import AlertDialog from '@/components/common/AlertDialog';
 
 export default function EditBookingScreen() {
   const { colors } = useTheme();
@@ -22,12 +34,28 @@ export default function EditBookingScreen() {
     loadBooking();
   }, [id]);
 
+  // Handle back button press
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (showConfirmDialog) {
+          setShowConfirmDialog(false);
+          return true;
+        }
+        return false;
+      }
+    );
+
+    return () => backHandler.remove();
+  }, [showConfirmDialog]);
+
   const loadBooking = async () => {
     if (!id) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const data = await getBookingById(id);
       setBooking(data);
@@ -40,45 +68,52 @@ export default function EditBookingScreen() {
     }
   };
 
-  const handleSave = async () => {
+  const handleConfirmSave = async () => {
     if (!booking || !id) return;
-    
-    setSaving(true);
-    setError(null);
-    
+
     try {
+      setSaving(true);
       await updateBooking(id, {
-        passenger_details: passengers
+        passenger_details: passengers,
       });
-      router.back();
+      router.push('/(tabs)/bookings');
     } catch (err) {
       setError('Failed to update booking. Please try again.');
       console.error(err);
     } finally {
       setSaving(false);
+      setShowConfirmDialog(false);
     }
   };
 
-  const updatePassenger = (index: number, field: keyof PassengerDetail, value: string) => {
+  const updatePassenger = (
+    index: number,
+    field: keyof PassengerDetail,
+    value: string
+  ) => {
     const updatedPassengers = [...passengers];
     updatedPassengers[index] = {
       ...updatedPassengers[index],
-      [field]: value
+      [field]: value,
     };
     setPassengers(updatedPassengers);
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Booking</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Edit Booking
+          </Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
@@ -93,22 +128,26 @@ export default function EditBookingScreen() {
 
   if (error || !booking) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Booking</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Edit Booking
+          </Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.error }]}>
             {error || 'Booking not found'}
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
             onPress={loadBooking}
           >
@@ -122,16 +161,20 @@ export default function EditBookingScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Booking</Text>
-        <TouchableOpacity 
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          Edit Booking
+        </Text>
+        <TouchableOpacity
           style={styles.saveButton}
           onPress={() => setShowConfirmDialog(true)}
           disabled={saving}
@@ -140,58 +183,109 @@ export default function EditBookingScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-          <View style={styles.cardHeader}>
-            <View style={styles.headerInfo}>
-              <Text style={[styles.flightCode, { color: colors.text }]}>
-                {booking.flight_details.flight_code}
-              </Text>
-              <Text style={[styles.bookingId, { color: colors.textSecondary }]}>
-                Booking #{booking.booking_id.substring(0, 8)}
-              </Text>
-            </View>
-            <View style={styles.passengerCount}>
-              <Users size={16} color={colors.textSecondary} />
-              <Text style={[styles.passengerCountText, { color: colors.textSecondary }]}>
-                {booking.num_tickets} passengers
-              </Text>
-            </View>
-          </View>
+      <FlatList
+        data={[
+          { type: 'header' as const },
+          ...passengers.map((p, i) => ({
+            type: 'passenger' as const,
+            passenger: p,
+            index: i,
+          })),
+        ]}
+        keyExtractor={(item, index) =>
+          item.type === 'header' ? 'header' : `passenger-${index}`
+        }
+        contentContainerStyle={styles.content}
+        renderItem={({
+          item,
+        }: {
+          item:
+            | { type: 'header' }
+            | { type: 'passenger'; passenger: PassengerDetail; index: number };
+        }) => {
+          if (item.type === 'header') {
+            return (
+              <View
+                style={[
+                  styles.card,
+                  { backgroundColor: colors.cardBackground },
+                ]}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerInfo}>
+                    <Text style={[styles.flightCode, { color: colors.text }]}>
+                      {booking.flight_details.flight_code}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.bookingId,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Booking #{booking.booking_id.substring(0, 8)}
+                    </Text>
+                  </View>
+                  <View style={styles.passengerCount}>
+                    <Users size={16} color={colors.textSecondary} />
+                    <Text
+                      style={[
+                        styles.passengerCountText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {booking.num_tickets} passengers
+                    </Text>
+                  </View>
+                </View>
 
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <View
+                  style={[styles.divider, { backgroundColor: colors.border }]}
+                />
 
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Passenger Information
-          </Text>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Passenger Information
+                </Text>
+              </View>
+            );
+          }
 
-          {passengers.map((passenger, index) => (
-            <View 
-              key={index}
+          const { passenger, index } = item;
+          return (
+            <View
               style={[
                 styles.passengerForm,
-                index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }
+                styles.card,
+                { backgroundColor: colors.cardBackground },
               ]}
             >
               <Text style={[styles.passengerTitle, { color: colors.text }]}>
                 Passenger {index + 1}
               </Text>
-              
+
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.inputLabel, { color: colors.textSecondary }]}
+                >
                   Full Name
                 </Text>
                 <TextInput
-                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  style={[
+                    styles.input,
+                    { color: colors.text, borderColor: colors.border },
+                  ]}
                   value={passenger.name}
-                  onChangeText={(value) => updatePassenger(index, 'name', value)}
+                  onChangeText={(value) =>
+                    updatePassenger(index, 'name', value)
+                  }
                   placeholder="Enter passenger name"
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.inputLabel, { color: colors.textSecondary }]}
+                >
                   Seat Preference
                 </Text>
                 <View style={styles.seatPreferenceContainer}>
@@ -200,14 +294,25 @@ export default function EditBookingScreen() {
                       key={preference}
                       style={[
                         styles.seatPreferenceButton,
-                        passenger.seat_preference === preference && { backgroundColor: colors.primary }
+                        passenger.seat_preference === preference && {
+                          backgroundColor: colors.primary,
+                        },
                       ]}
-                      onPress={() => updatePassenger(index, 'seat_preference', preference)}
+                      onPress={() =>
+                        updatePassenger(index, 'seat_preference', preference)
+                      }
                     >
-                      <Text style={[
-                        styles.seatPreferenceText,
-                        { color: passenger.seat_preference === preference ? colors.white : colors.text }
-                      ]}>
+                      <Text
+                        style={[
+                          styles.seatPreferenceText,
+                          {
+                            color:
+                              passenger.seat_preference === preference
+                                ? colors.white
+                                : colors.text,
+                          },
+                        ]}
+                      >
                         {preference}
                       </Text>
                     </TouchableOpacity>
@@ -215,21 +320,68 @@ export default function EditBookingScreen() {
                 </View>
               </View>
             </View>
-          ))}
-        </View>
-      </ScrollView>
-
-      <AlertDialog
-        visible={showConfirmDialog}
-        title="Save Changes"
-        message="Are you sure you want to save these changes to your booking?"
-        confirmText="Save Changes"
-        cancelText="Cancel"
-        confirmButtonColor={colors.primary}
-        loading={saving}
-        onConfirm={handleSave}
-        onCancel={() => setShowConfirmDialog(false)}
+          );
+        }}
       />
+
+      <Modal
+        visible={showConfirmDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowConfirmDialog(false)}
+      >
+        <Pressable
+          style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+          onPress={() => setShowConfirmDialog(false)}
+        >
+          <Pressable
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBackground },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Save Changes
+            </Text>
+            <Text
+              style={[styles.modalMessage, { color: colors.textSecondary }]}
+            >
+              Are you sure you want to save these changes to your booking?
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: colors.background },
+                ]}
+                onPress={() => setShowConfirmDialog(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={handleConfirmSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text
+                    style={[styles.modalButtonText, { color: colors.white }]}
+                  >
+                    Save Changes
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -274,6 +426,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    marginHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -389,5 +542,46 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontFamily: 'Inter-Medium',
     fontSize: 16,
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    borderRadius: 12,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontFamily: 'Roboto-Medium',
+    fontSize: 20,
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 16,
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 16,
+  },
 });
