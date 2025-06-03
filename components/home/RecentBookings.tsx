@@ -1,41 +1,43 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useTheme } from '@/context/ThemeContext';
+import { useApi } from '@/context/AuthContext';
 import { router } from 'expo-router';
 import { Clock, Calendar } from 'lucide-react-native';
 import { format } from 'date-fns';
-
-const recentFlights = [
-  {
-    id: '1',
-    origin: 'JKT',
-    destination: 'SIN',
-    flightCode: 'GA825',
-    airline: 'Garuda Indonesia',
-    departureDate: '2025-05-15T09:30:00Z',
-    price: 320
-  },
-  {
-    id: '2',
-    origin: 'SIN',
-    destination: 'BKK',
-    flightCode: 'SQ305',
-    airline: 'Singapore Airlines',
-    departureDate: '2025-05-20T14:15:00Z',
-    price: 280
-  },
-  {
-    id: '3',
-    origin: 'BKK',
-    destination: 'HKG',
-    flightCode: 'TG601',
-    airline: 'Thai Airways',
-    departureDate: '2025-05-25T11:45:00Z',
-    price: 350
-  }
-];
+import { searchFlights } from '@/services/api';
+import { Flight } from '@/types';
 
 export default function RecentBookings() {
   const { colors } = useTheme();
+  const { baseUrl } = useApi();
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchFlights = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Ambil 3 flight teratas (tanpa filter asal/tujuan/tanggal)
+        const result = await searchFlights({}, baseUrl);
+        setFlights(result.slice(0, 3));
+      } catch (err) {
+        setError('Unable to load trending flights');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFlights();
+  }, [baseUrl]);
+
+  if (loading) {
+    return <ActivityIndicator style={{ margin: 24 }} color={colors.primary} />;
+  }
+  if (error) {
+    return <Text style={{ color: colors.error, margin: 24 }}>{error}</Text>;
+  }
 
   return (
     <ScrollView
@@ -43,44 +45,37 @@ export default function RecentBookings() {
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.container}
     >
-      {recentFlights.map((flight) => (
+      {flights.map((flight) => (
         <TouchableOpacity
           key={flight.id}
           style={[styles.card, { backgroundColor: colors.cardBackground }]}
-          onPress={() => router.push('/search')}
+          onPress={() => router.push({ pathname: '/flight/[id]', params: { id: flight.id.toString(), flight: JSON.stringify(flight) } })}
         >
           <View style={styles.header}>
             <View style={styles.routeContainer}>
-              <Text style={[styles.city, { color: colors.text }]}>{flight.origin}</Text>
+              <Text style={[styles.city, { color: colors.text }]}>{flight.origin_city}</Text>
               <View style={styles.routeLine}>
                 <View style={[styles.line, { backgroundColor: colors.border }]} />
                 <View style={[styles.dot, { backgroundColor: colors.primary }]} />
               </View>
-              <Text style={[styles.city, { color: colors.text }]}>{flight.destination}</Text>
+              <Text style={[styles.city, { color: colors.text }]}>{flight.destination_city}</Text>
             </View>
           </View>
-          
-          <Text style={[styles.airline, { color: colors.text }]}>{flight.airline}</Text>
-          <Text style={[styles.flightCode, { color: colors.textSecondary }]}>{flight.flightCode}</Text>
-          
+          <Text style={[styles.airline, { color: colors.text }]}>{flight.airline_name}</Text>
+          <Text style={[styles.flightCode, { color: colors.textSecondary }]}>{flight.flight_code}</Text>
           <View style={styles.footer}>
             <View style={styles.infoRow}>
               <Calendar size={14} color={colors.textSecondary} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                {format(new Date(flight.departureDate), 'MMM d, yyyy')}
-              </Text>
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>{format(new Date(flight.departure_datetime), 'MMM d, yyyy')}</Text>
             </View>
             <View style={styles.infoRow}>
               <Clock size={14} color={colors.textSecondary} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                {format(new Date(flight.departureDate), 'h:mm a')}
-              </Text>
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}> {format(new Date(flight.departure_datetime), 'h:mm a')}</Text>
             </View>
           </View>
-          
           <View style={styles.priceContainer}>
             <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>from</Text>
-            <Text style={[styles.price, { color: colors.primary }]}>${flight.price}</Text>
+            <Text style={[styles.price, { color: colors.primary }]}>Rp{flight.price.toLocaleString('id-ID')}</Text>
           </View>
         </TouchableOpacity>
       ))}

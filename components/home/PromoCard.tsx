@@ -48,6 +48,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 24,
+    marginTop: 24,
   },
   background: {
     width: '100%',

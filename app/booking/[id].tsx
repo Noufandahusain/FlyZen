@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useApi } from '@/context/AuthContext';
 import { useLocalSearchParams, router } from 'expo-router';
 import {
   ArrowLeft,
@@ -31,6 +32,7 @@ import BookingStatusBadge from '@/components/bookings/BookingStatusBadge';
 
 export default function BookingDetailScreen() {
   const { colors } = useTheme();
+  const { baseUrl } = useApi();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function BookingDetailScreen() {
     setError(null);
 
     try {
-      const data = await getBookingById(bookingId);
+      const data = await getBookingById(bookingId, baseUrl);
       setBooking(data);
     } catch (err) {
       setError('Unable to load booking details. Please try again.');
@@ -163,6 +165,10 @@ export default function BookingDetailScreen() {
   const canCancel = booking.status !== 'CANCELLED';
   const canEdit =
     booking.status === 'PENDING' || booking.status === 'CONFIRMED';
+
+  // Hitung base fare
+  const baseFare = booking.flight_details.price * booking.num_tickets;
+  const total = baseFare;
 
   return (
     <SafeAreaView
@@ -277,25 +283,18 @@ export default function BookingDetailScreen() {
           </Text>
           <View style={[styles.priceRow, { borderBottomColor: colors.border }]}>
             <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-              Base Fare ({booking.num_tickets}{' '}
-              {booking.num_tickets === 1 ? 'ticket' : 'tickets'})
+              Price ({booking.num_tickets} {booking.num_tickets === 1 ? 'ticket' : 'tickets'})
             </Text>
             <Text style={[styles.priceValue, { color: colors.text }]}>
-              ${booking.flight_details.price * booking.num_tickets}
+              Rp{baseFare.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </Text>
-          </View>
-          <View style={[styles.priceRow, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-              Taxes & Fees
-            </Text>
-            <Text style={[styles.priceValue, { color: colors.text }]}>$35</Text>
           </View>
           <View style={styles.priceRow}>
             <Text style={[styles.totalLabel, { color: colors.text }]}>
               Total
             </Text>
             <Text style={[styles.totalValue, { color: colors.primary }]}>
-              ${booking.total_price}
+              Rp{total.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </Text>
           </View>
         </View>

@@ -10,6 +10,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { useApi } from '@/context/AuthContext';
 import {
   ArrowLeft,
   Plane,
@@ -18,46 +20,45 @@ import {
   CreditCard,
 } from 'lucide-react-native';
 import { format, differenceInMinutes } from 'date-fns';
-import { Flight } from '@/types';
+import { Flight, FlightSearchParams } from '@/types';
+import { searchFlights, getBookings } from '@/services/api';
+import AlertDialog from '@/components/common/AlertDialog';
 
 export default function FlightDetailsScreen() {
   const { colors } = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  const { baseUrl } = useApi();
+  const params = useLocalSearchParams();
+  const numPassengers = Array.isArray(params.num_passengers) ? params.num_passengers[0] : params.num_passengers || '1';
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const flightString = Array.isArray(params.flight) ? params.flight[0] : params.flight;
   const [flight, setFlight] = useState<Flight | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPendingAlert, setShowPendingAlert] = useState(false);
 
   useEffect(() => {
-    loadFlightDetails();
-  }, [id]);
+    console.log('Flight details page received params:', { id, flightString });
 
-  const loadFlightDetails = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Mock flight data for demonstration
-      const mockFlight: Flight = {
-        id: parseInt(id),
-        flight_code: 'GA204',
-        airline_name: 'Garuda Indonesia',
-        origin_city: 'CGK',
-        destination_city: 'DPS',
-        departure_datetime: '2025-12-20T08:00:00Z',
-        arrival_datetime: '2025-12-20T10:50:00Z',
-        price: 1650000,
-        available_seats: 35,
-      };
-
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API call
-      setFlight(mockFlight);
-    } catch (err) {
-      setError('Unable to load flight details. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
+    if (flightString) {
+      try {
+        const parsedFlight: Flight = JSON.parse(flightString);
+        setFlight(parsedFlight);
+        setLoading(false);
+      } catch (e) {
+        console.error('Failed to parse flight object from params:', e);
+        setError('Unable to load flight details.');
+        setLoading(false);
+      }
+    } else if (id) {
+        setError('Flight data not passed during navigation.');
+        setLoading(false);
+    } else {
+        setError('Flight ID is missing.');
+        setLoading(false);
     }
-  };
+
+  }, [id, flightString]);
 
   const formatDuration = (departure: string, arrival: string) => {
     const departureTime = new Date(departure);
@@ -66,6 +67,40 @@ export default function FlightDetailsScreen() {
     const hours = Math.floor(durationMinutes / 60);
     const minutes = durationMinutes % 60;
     return `${hours}h ${minutes}m`;
+  };
+
+  // Hitung base fare
+  const baseFare = flight ? flight.price : 0;
+  const total = baseFare;
+
+  const handleBookNow = async () => {
+    if (!user?.email) return;
+
+    try {
+      // Check for pending payments
+      const bookings = await getBookings(user?.email, baseUrl);
+      const hasPendingPayment = bookings.some(
+        booking => booking.status === 'PENDING_PAYMENT'
+      );
+
+      if (hasPendingPayment) {
+        setShowPendingAlert(true);
+        return;
+      }
+
+      // If no pending payments, proceed with booking
+      router.push({
+        pathname: '/booking/new',
+        params: { 
+          flightId: flight?.id.toString(),
+          flight: JSON.stringify(flight),
+          num_passengers: numPassengers,
+        },
+      });
+    } catch (err) {
+      console.error('Error checking bookings:', err);
+      setError('Unable to check booking status. Please try again.');
+    }
   };
 
   if (loading) {
@@ -116,14 +151,6 @@ export default function FlightDetailsScreen() {
           <Text style={[styles.errorText, { color: colors.error }]}>
             {error || 'Flight not found'}
           </Text>
-          <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: colors.primary }]}
-            onPress={loadFlightDetails}
-          >
-            <Text style={[styles.retryButtonText, { color: colors.white }]}>
-              Try Again
-            </Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -259,36 +286,25 @@ export default function FlightDetailsScreen() {
           </Text>
           <View style={[styles.priceRow, { borderBottomColor: colors.border }]}>
             <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-              Base Fare
+              Price
             </Text>
             <Text style={[styles.priceValue, { color: colors.text }]}>
-              ${flight.price}
+              Rp{baseFare.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </Text>
-          </View>
-          <View style={[styles.priceRow, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-              Taxes & Fees
-            </Text>
-            <Text style={[styles.priceValue, { color: colors.text }]}>$35</Text>
           </View>
           <View style={styles.priceRow}>
             <Text style={[styles.totalLabel, { color: colors.text }]}>
               Total
             </Text>
             <Text style={[styles.totalValue, { color: colors.primary }]}>
-              ${flight.price + 35}
+              Rp{total.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </Text>
           </View>
         </View>
 
         <TouchableOpacity
           style={[styles.bookButton, { backgroundColor: colors.primary }]}
-          onPress={() =>
-            router.push({
-              pathname: '/booking/new',
-              params: { flightId: flight.id.toString() },
-            })
-          }
+          onPress={handleBookNow}
         >
           <CreditCard size={20} color={colors.white} />
           <Text style={[styles.bookButtonText, { color: colors.white }]}>
@@ -296,6 +312,20 @@ export default function FlightDetailsScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <AlertDialog
+        visible={showPendingAlert}
+        title="Pending Payment Required"
+        message="You have a pending payment that needs to be completed before making a new booking."
+        confirmText="Go to Bookings"
+        cancelText="Cancel"
+        confirmButtonColor={colors.primary}
+        onConfirm={() => {
+          setShowPendingAlert(false);
+          router.push('/(tabs)/bookings');
+        }}
+        onCancel={() => setShowPendingAlert(false)}
+      />
     </SafeAreaView>
   );
 }

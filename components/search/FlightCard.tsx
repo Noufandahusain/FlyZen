@@ -36,9 +36,8 @@ export default function FlightCard({ flight, onPress }: FlightCardProps) {
           </Text>
         </View>
         <View style={[styles.priceTag, { backgroundColor: colors.primary + '15' }]}>
-          <DollarSign size={14} color={colors.primary} />
           <Text style={[styles.price, { color: colors.primary }]}>
-            ${flight.price}
+            Rp{flight.price.toLocaleString('id-ID')}
           </Text>
         </View>
       </View>

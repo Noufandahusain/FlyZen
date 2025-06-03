@@ -31,9 +31,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Mock user for demo purposes
       setUser({
         id: 'user_test_001',
-        firstName: 'John',
-        lastName: 'Doe',
-        email: 'john.doe@example.com',
+        firstName: 'Noufanda',
+        lastName: 'Husain',
+        email: 'nopaaannnnn@gmail.com',
       });
       setIsLoading(false);
     }, 1000);
@@ -72,3 +72,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
+// API BASE URL CONTEXT
+const ApiContext = createContext<{ baseUrl: string }>({ baseUrl: 'http://10.49.66.71:3000' });
+
+export const ApiProvider = ({ children }: { children: ReactNode }) => {
+  const [baseUrl] = useState('http://10.49.66.71:3000');
+  return (
+    <ApiContext.Provider value={{ baseUrl }}>
+      {children}
+    </ApiContext.Provider>
+  );
+};
+
+export const useApi = () => useContext(ApiContext);

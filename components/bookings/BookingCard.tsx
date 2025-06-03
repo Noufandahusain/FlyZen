@@ -21,11 +21,16 @@ export default function BookingCard({ booking, onPress }: BookingCardProps) {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={[styles.flightCode, { color: colors.text }]}>
-            {booking.flight_code}
+            {booking.flight.name}
           </Text>
           <Text style={[styles.bookingId, { color: colors.textSecondary }]}>
             Booking #{booking.booking_id.substring(0, 8)}
           </Text>
+          {/* {booking.user_email && (
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              {booking.user_email}
+            </Text>
+          )} */}
         </View>
         <BookingStatusBadge status={booking.status} />
       </View>
@@ -36,24 +41,24 @@ export default function BookingCard({ booking, onPress }: BookingCardProps) {
         <View style={styles.detailRow}>
           <Plane size={16} color={colors.textSecondary} />
           <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-            {booking.origin_city} → {booking.destination_city}
+            {booking.flight.origin} → {booking.flight.destination}
           </Text>
         </View>
 
         <View style={styles.detailRow}>
           <Calendar size={16} color={colors.textSecondary} />
           <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-            {format(new Date(booking.booking_date), 'MMM d, yyyy')}
+            {format(new Date(booking.flight.departure_time), 'MMM d, yyyy')}
           </Text>
         </View>
       </View>
 
       <View style={styles.footer}>
         <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-          Total Price
+          Price
         </Text>
         <Text style={[styles.price, { color: colors.primary }]}>
-          ${booking.total_price}
+          Rp{booking.total_price.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </Text>
       </View>
     </TouchableOpacity>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useApi } from '@/context/AuthContext';
 import { router } from 'expo-router';
 import { Filter } from 'lucide-react-native';
 import BookingCard from '@/components/bookings/BookingCard';
@@ -10,11 +11,12 @@ import { getBookings } from '@/services/api';
 import { BookingSummary } from '@/types';
 import EmptyState from '@/components/common/EmptyState';
 
-type FilterStatus = 'ALL' | 'CONFIRMED' | 'PENDING' | 'CANCELLED';
+type FilterStatus = 'ALL' | 'CONFIRMED' | 'PENDING_PAYMENT' | 'EXPIRED' | 'CANCELLED';
 
 export default function BookingsScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { baseUrl } = useApi();
   const [bookings, setBookings] = useState<BookingSummary[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<BookingSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +25,7 @@ export default function BookingsScreen() {
 
   useEffect(() => {
     loadBookings();
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     if (filterStatus === 'ALL') {
@@ -34,16 +36,20 @@ export default function BookingsScreen() {
   }, [filterStatus, bookings]);
 
   const loadBookings = async () => {
-    if (!user) return;
-    
     setLoading(true);
     setError(null);
     
     try {
-      const data = await getBookings(user.id);
-      setBookings(data);
+      const response = await fetch(`${baseUrl}/bookings`, {
+        headers: {
+          'x-user-email': user?.email || ''
+        }
+      });
+      const data = await response.json();
+      setBookings(Array.isArray(data) ? data.reverse() : []);
     } catch (err) {
       setError('Unable to load bookings. Please try again.');
+      setBookings([]);
       console.error(err);
     } finally {
       setLoading(false);
@@ -73,8 +79,9 @@ export default function BookingsScreen() {
     <View style={styles.filtersContainer}>
       {renderFilter('ALL', 'All')}
       {renderFilter('CONFIRMED', 'Confirmed')}
-      {renderFilter('PENDING', 'Pending')}
-      {renderFilter('CANCELLED', 'Cancelled')}
+      {renderFilter('PENDING_PAYMENT', 'Pending')}
+      {renderFilter('EXPIRED', 'Expired')}
+      {/* {renderFilter('CANCELLED', 'Cancelled')} */}
     </View>
   );
 
@@ -82,8 +89,8 @@ export default function BookingsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>My Bookings</Text>
-        <TouchableOpacity style={styles.filterIcon}>
-          <Filter size={20} color={colors.text} />
+        <TouchableOpacity style={styles.refreshButton} onPress={loadBookings}>
+          <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 28 }}>⟳</Text>
         </TouchableOpacity>
       </View>
 
@@ -153,12 +160,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto-Bold',
     fontSize: 24,
   },
-  filterIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  refreshButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    marginLeft: 8,
   },
   filtersContainer: {
     flexDirection: 'row',

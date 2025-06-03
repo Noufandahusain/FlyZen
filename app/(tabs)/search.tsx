@@ -10,27 +10,31 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
+import { useApi } from '@/context/AuthContext';
 import { ArrowLeft } from 'lucide-react-native';
 import SearchForm from '@/components/search/SearchForm';
 import FlightCard from '@/components/search/FlightCard';
 import { searchFlights } from '@/services/api';
-import { Flight } from '@/types';
+import { Flight, FlightSearchParams } from '@/types';
 import EmptyState from '@/components/common/EmptyState';
 
 export default function SearchScreen() {
   const { colors } = useTheme();
+  const { baseUrl } = useApi();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSearchParams, setLastSearchParams] = useState<FlightSearchParams | null>(null);
 
-  const handleSearch = async (searchParams: any) => {
+  const handleSearch = async (searchParams: FlightSearchParams) => {
     setLoading(true);
     setError(null);
     setSearched(true);
+    const { num_passengers, ...paramsWithoutPassengers } = searchParams;
 
     try {
-      const results = await searchFlights(searchParams);
+      const results = await searchFlights(paramsWithoutPassengers, baseUrl);
       setFlights(results);
     } catch (err) {
       setError('Unable to fetch flights. Please try again.');
@@ -60,7 +64,8 @@ export default function SearchScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
-            onPress={() => handleSearch({})}
+            onPress={() => lastSearchParams && handleSearch(lastSearchParams)}
+            disabled={!lastSearchParams}
           >
             <Text style={[styles.retryButtonText, { color: colors.white }]}>
               Try Again
@@ -93,10 +98,17 @@ export default function SearchScreen() {
               key={flight.id}
               flight={flight}
               onPress={() =>
-                router.push({
-                  pathname: '/flight/[id]' as const,
-                  params: { id: flight.id.toString() },
-                })
+                {
+                  console.log('Navigating to flight details with flight object:', flight);
+                  router.push({
+                    pathname: '/flight/[id]' as const,
+                    params: {
+                      id: flight.id.toString(),
+                      flight: JSON.stringify(flight),
+                      num_passengers: lastSearchParams?.num_passengers?.toString() || '1',
+                    },
+                  })
+                }
               }
             />
           ))}
@@ -129,6 +141,7 @@ export default function SearchScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <SearchForm onSearch={handleSearch} />
         {renderResults()}

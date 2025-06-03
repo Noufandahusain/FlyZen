@@ -20,9 +20,9 @@ export interface FlightSearchParams {
 
 // Booking-related types
 export interface BookingRequest {
-  flight_code: string;
-  user_id: string;
-  num_tickets: number;
+  flight_id: string;
+  num_seats: number;
+  user_email?: string;
   passenger_details?: PassengerDetail[];
 }
 
@@ -33,13 +33,18 @@ export interface PassengerDetail {
 
 export interface BookingSummary {
   booking_id: string;
-  flight_code: string;
-  user_id: string;
   status: string;
-  booking_date: string;
+  flight: {
+    id: string;
+    name: string;
+    departure_time: string;
+    arrival_time: string;
+    origin: string;
+    destination: string;
+  };
   total_price: number;
-  origin_city: string;
-  destination_city: string;
+  flight_code?: string;
+  user_email?: string;
 }
 
 export interface BookingDetail {

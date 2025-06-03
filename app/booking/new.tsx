@@ -14,7 +14,9 @@ import { useTheme } from '@/context/ThemeContext';
 import { ArrowLeft, Plane, Users, Clock } from 'lucide-react-native';
 import { format, differenceInMinutes } from 'date-fns';
 import { Flight } from '@/types';
-import { createBooking } from '@/services/api';
+import { createBooking, searchFlights } from '@/services/api';
+import { useAuth } from '@/context/AuthContext';
+import { useApi } from '@/context/AuthContext';
 
 type PassengerDetail = {
   name: string;
@@ -27,20 +29,39 @@ type FieldError = {
 
 export default function NewBookingScreen() {
   const { colors } = useTheme();
-  const { flightId } = useLocalSearchParams<{ flightId: string }>();
+  const { user } = useAuth();
+  const { baseUrl } = useApi();
+  const { flightId, flight: flightString, num_passengers } = useLocalSearchParams<{ 
+    flightId: string;
+    flight?: string;
+    num_passengers?: string;
+  }>();
   const [flight, setFlight] = useState<Flight | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [numPassengers, setNumPassengers] = useState(1);
+  const [numPassengers, setNumPassengers] = useState(Number(num_passengers) || 1);
   const [passengerDetails, setPassengerDetails] = useState<PassengerDetail[]>([
     { name: '', seat_preference: 'Window' },
   ]);
   const [fieldErrors, setFieldErrors] = useState<FieldError[]>([{}]);
 
   useEffect(() => {
-    loadFlightDetails();
-  }, [flightId]);
+    if (flightString) {
+      try {
+        const parsedFlight: Flight = JSON.parse(flightString);
+        setFlight(parsedFlight);
+        setLoading(false);
+      } catch (e) {
+        console.error('Failed to parse flight object from params:', e);
+        setError('Unable to load flight details.');
+        setLoading(false);
+      }
+    } else {
+      setError('Flight data not passed during navigation.');
+      setLoading(false);
+    }
+  }, [flightString]);
 
   useEffect(() => {
     // Update passenger details array when number of passengers changes
@@ -60,34 +81,6 @@ export default function NewBookingScreen() {
     setPassengerDetails(newDetails);
     setFieldErrors(newErrors);
   }, [numPassengers]);
-
-  const loadFlightDetails = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Mock flight data for demonstration
-      const mockFlight: Flight = {
-        id: parseInt(flightId),
-        flight_code: 'GA204',
-        airline_name: 'Garuda Indonesia',
-        origin_city: 'CGK',
-        destination_city: 'DPS',
-        departure_datetime: '2025-12-20T08:00:00Z',
-        arrival_datetime: '2025-12-20T10:50:00Z',
-        price: 1650000,
-        available_seats: 35,
-      };
-
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API call
-      setFlight(mockFlight);
-    } catch (err) {
-      setError('Unable to load flight details. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatDuration = (departure: string, arrival: string) => {
     const departureTime = new Date(departure);
@@ -131,26 +124,22 @@ export default function NewBookingScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!flight) return;
+    if (!flight || !user?.email) return;
 
-    if (!validateFields()) {
-      return;
-    }
+    // if (!validateFields()) {
+    //   return;
+    // }
 
     setSubmitting(true);
     setError(null);
 
     try {
       const bookingData = {
-        flight_id: flight.id,
-        flight_code: flight.flight_code,
-        user_id: '1', // This should come from auth context
-        num_tickets: numPassengers,
-        passenger_details: passengerDetails,
-        total_price: flight.price * numPassengers + 35, // Base price + taxes
+        flight_id: flight.id.toString(),
+        num_seats: numPassengers
       };
 
-      await createBooking(bookingData);
+      await createBooking(bookingData, user?.email || '', baseUrl);
       router.replace('/(tabs)/bookings');
     } catch (err) {
       setError('Failed to create booking. Please try again.');
@@ -210,7 +199,9 @@ export default function NewBookingScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
-            onPress={loadFlightDetails}
+            onPress={() => {
+              // Implement retry logic
+            }}
           >
             <Text style={[styles.retryButtonText, { color: colors.white }]}>
               Try Again
@@ -220,6 +211,10 @@ export default function NewBookingScreen() {
       </SafeAreaView>
     );
   }
+
+  // Hitung base fare
+  const baseFare = flight ? flight.price * numPassengers : 0;
+  const total = baseFare;
 
   return (
     <SafeAreaView
@@ -338,125 +333,67 @@ export default function NewBookingScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Number of Passengers
           </Text>
-          <View style={styles.passengerCountContainer}>
+          <View style={styles.counterContainer}>
             <TouchableOpacity
-              style={[
-                styles.countButton,
-                { backgroundColor: colors.primary + '15' },
-              ]}
-              onPress={() => setNumPassengers((prev) => Math.max(1, prev - 1))}
+              style={[styles.counterButton, { backgroundColor: colors.background }]}
+              onPress={() => {
+                if (numPassengers > 1) {
+                  setNumPassengers(numPassengers - 1);
+                }
+              }}
             >
-              <Text style={[styles.countButtonText, { color: colors.primary }]}>
-                -
-              </Text>
+              <Text style={[styles.counterButtonText, { color: colors.text }]}>-</Text>
             </TouchableOpacity>
             <Text style={[styles.passengerCount, { color: colors.text }]}>
               {numPassengers}
             </Text>
             <TouchableOpacity
-              style={[
-                styles.countButton,
-                { backgroundColor: colors.primary + '15' },
-              ]}
-              onPress={() =>
-                setNumPassengers((prev) =>
-                  Math.min(flight.available_seats, prev + 1)
-                )
-              }
+              style={[styles.counterButton, { backgroundColor: colors.background }]}
+              onPress={() => {
+                if (numPassengers < flight.available_seats) {
+                  setNumPassengers(numPassengers + 1);
+                }
+              }}
             >
-              <Text style={[styles.countButtonText, { color: colors.primary }]}>
-                +
-              </Text>
+              <Text style={[styles.counterButtonText, { color: colors.text }]}>+</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+        {/* <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Passenger Details
           </Text>
           {passengerDetails.map((passenger, index) => (
-            <View
-              key={index}
-              style={[
-                styles.passengerForm,
-                index > 0 && {
-                  borderTopWidth: StyleSheet.hairlineWidth,
-                  borderTopColor: colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[styles.passengerLabel, { color: colors.textSecondary }]}
-              >
+            <View key={index} style={styles.passengerForm}>
+              <Text style={[styles.passengerLabel, { color: colors.text }]}>
                 Passenger {index + 1}
               </Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.text,
-                      backgroundColor: colors.background,
-                      borderColor: fieldErrors[index]?.name
-                        ? colors.error
-                        : colors.border,
-                    },
-                  ]}
-                  placeholder="Full Name"
-                  placeholderTextColor={colors.textSecondary}
-                  value={passenger.name}
-                  onChangeText={(text) =>
-                    handlePassengerDetailChange(index, 'name', text)
-                  }
-                />
-                {fieldErrors[index]?.name && (
-                  <Text style={[styles.fieldError, { color: colors.error }]}>
-                    {fieldErrors[index].name}
-                  </Text>
-                )}
-              </View>
-              <View style={styles.seatPreferenceContainer}>
-                {['Window', 'Middle', 'Aisle'].map((seat) => (
-                  <TouchableOpacity
-                    key={seat}
-                    style={[
-                      styles.seatOption,
-                      {
-                        backgroundColor:
-                          passenger.seat_preference === seat
-                            ? colors.primary
-                            : colors.background,
-                        borderColor: colors.primary,
-                      },
-                    ]}
-                    onPress={() =>
-                      handlePassengerDetailChange(
-                        index,
-                        'seat_preference',
-                        seat
-                      )
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.seatOptionText,
-                        {
-                          color:
-                            passenger.seat_preference === seat
-                              ? colors.white
-                              : colors.primary,
-                        },
-                      ]}
-                    >
-                      {seat}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: fieldErrors[index]?.name
+                      ? colors.error
+                      : colors.border,
+                  },
+                ]}
+                placeholder="Full Name"
+                placeholderTextColor={colors.textSecondary}
+                value={passenger.name}
+                onChangeText={(value) =>
+                  handlePassengerDetailChange(index, 'name', value)
+                }
+              />
+              {fieldErrors[index]?.name && (
+                <Text style={[styles.errorText, { color: colors.error }]}>
+                  {fieldErrors[index].name}
+                </Text>
+              )}
             </View>
           ))}
-        </View>
+        </View> */}
 
         <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -464,44 +401,24 @@ export default function NewBookingScreen() {
           </Text>
           <View style={[styles.priceRow, { borderBottomColor: colors.border }]}>
             <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-              Base Fare ({numPassengers}{' '}
-              {numPassengers === 1 ? 'ticket' : 'tickets'})
+              Price ({numPassengers} {numPassengers === 1 ? 'ticket' : 'tickets'})
             </Text>
             <Text style={[styles.priceValue, { color: colors.text }]}>
-              ${flight.price * numPassengers}
+              Rp{baseFare.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </Text>
-          </View>
-          <View style={[styles.priceRow, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-              Taxes & Fees
-            </Text>
-            <Text style={[styles.priceValue, { color: colors.text }]}>$35</Text>
           </View>
           <View style={styles.priceRow}>
             <Text style={[styles.totalLabel, { color: colors.text }]}>
               Total
             </Text>
             <Text style={[styles.totalValue, { color: colors.primary }]}>
-              ${flight.price * numPassengers + 35}
+              Rp{total.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </Text>
           </View>
         </View>
 
-        {error && (
-          <Text style={[styles.errorMessage, { color: colors.error }]}>
-            {error}
-          </Text>
-        )}
-
         <TouchableOpacity
-          style={[
-            styles.submitButton,
-            {
-              backgroundColor: submitting
-                ? colors.primary + '50'
-                : colors.primary,
-            },
-          ]}
+          style={[styles.submitButton, { backgroundColor: colors.primary }]}
           onPress={handleSubmit}
           disabled={submitting}
         >
@@ -643,19 +560,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 12,
   },
-  passengerCountContainer: {
+  counterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  countButton: {
+  counterButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  countButtonText: {
+  counterButtonText: {
     fontSize: 24,
     fontFamily: 'Inter-Medium',
   },
@@ -672,9 +589,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 8,
   },
-  inputContainer: {
-    marginBottom: 12,
-  },
   input: {
     height: 48,
     borderWidth: 1,
@@ -683,28 +597,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     fontSize: 16,
   },
-  fieldError: {
+  errorText: {
     fontFamily: 'Inter-Regular',
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
-  },
-  seatPreferenceContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  seatOption: {
-    flex: 1,
-    height: 40,
-    borderWidth: 1,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  seatOptionText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
   },
   priceRow: {
     flexDirection: 'row',
@@ -727,12 +624,6 @@ const styles = StyleSheet.create({
   totalValue: {
     fontFamily: 'Roboto-Bold',
     fontSize: 18,
-  },
-  errorMessage: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   submitButton: {
     height: 50,
@@ -762,12 +653,6 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  errorText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   retryButton: {
     paddingHorizontal: 24,

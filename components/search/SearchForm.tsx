@@ -1,11 +1,25 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, ScrollView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Calendar, Map, Users } from 'lucide-react-native';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useTheme } from '@/context/ThemeContext';
 import { format } from 'date-fns';
+
+// Static list of Indonesian cities (add more as needed)
+const IndonesianCities = [
+  'Jakarta',
+  'Surabaya',
+  'Bandung',
+  'Medan',
+  'Semarang',
+  'Yogyakarta',
+  'Denpasar',
+  'Makassar',
+  'Palembang',
+  'Tangerang',
+];
 
 const SearchSchema = Yup.object().shape({
   origin_city: Yup.string().required('Origin is required'),
@@ -21,6 +35,42 @@ type SearchFormProps = {
 export default function SearchForm({ onSearch }: SearchFormProps) {
   const { colors } = useTheme();
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [originSuggestions, setOriginSuggestions] = useState<string[]>([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<string[]>([]);
+
+  // Define styles that use the colors object inside the component
+  const themedStyles = StyleSheet.create({
+    suggestionsContainer: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      backgroundColor: colors.cardBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      marginTop: 2,
+      maxHeight: 150,
+      zIndex: 9999,
+      elevation: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+    },
+    suggestionItem: {
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.cardBackground,
+    },
+    suggestionText: {
+      fontSize: 16,
+      fontFamily: 'Inter-Regular',
+      color: colors.text,
+    },
+  });
 
   const initialValues = {
     origin_city: '',
@@ -36,6 +86,22 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
     }
   };
 
+  const filterCities = (text: string, setSuggestions: React.Dispatch<React.SetStateAction<string[]>>) => {
+    if (!text) {
+      setSuggestions([]);
+      return;
+    }
+    const filtered = IndonesianCities.filter(city =>
+      city.toLowerCase().includes(text.toLowerCase())
+    );
+    setSuggestions(filtered);
+  };
+
+  const handleCitySelect = (city: string, field: 'origin_city' | 'destination_city', setFieldValue: any, setSuggestions: React.Dispatch<React.SetStateAction<string[]>>) => {
+    setFieldValue(field, city);
+    setSuggestions([]);
+  };
+
   return (
     <Formik
       initialValues={initialValues}
@@ -49,7 +115,8 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
     >
       {({ handleChange, handleBlur, handleSubmit, values, errors, touched, setFieldValue }) => (
         <View style={[styles.formContainer, { backgroundColor: colors.cardBackground }]}>
-          <View style={styles.formField}>
+          {/* Origin Field */}
+          <View style={[styles.formField, { zIndex: originSuggestions.length > 0 ? 1000 : 1 }]}>
             <View style={styles.inputIconContainer}>
               <Map size={20} color={colors.primary} />
             </View>
@@ -60,9 +127,38 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
                 placeholder="Enter city or airport code"
                 placeholderTextColor={colors.textSecondary}
                 value={values.origin_city}
-                onChangeText={handleChange('origin_city')}
-                onBlur={handleBlur('origin_city')}
+                onChangeText={(text) => {
+                  handleChange('origin_city')(text);
+                  filterCities(text, setOriginSuggestions);
+                }}
+                onBlur={(e) => {
+                  handleBlur('origin_city')(e);
+                  setTimeout(() => setOriginSuggestions([]), 200);
+                }}
+                onFocus={() => filterCities(values.origin_city, setOriginSuggestions)}
               />
+              {originSuggestions.length > 0 && (
+                <View style={themedStyles.suggestionsContainer}>
+                  <ScrollView 
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {originSuggestions.map((item) => (
+                      <TouchableOpacity
+                        key={item}
+                        style={themedStyles.suggestionItem}
+                        onPress={() => handleCitySelect(item, 'origin_city', setFieldValue, setOriginSuggestions)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={themedStyles.suggestionText}>
+                          {item}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           </View>
           {touched.origin_city && errors.origin_city && (
@@ -71,7 +167,8 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          <View style={styles.formField}>
+          {/* Destination Field */}
+          <View style={[styles.formField, { zIndex: destinationSuggestions.length > 0 ? 999 : 1 }]}>
             <View style={styles.inputIconContainer}>
               <Map size={20} color={colors.primary} />
             </View>
@@ -82,9 +179,38 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
                 placeholder="Enter city or airport code"
                 placeholderTextColor={colors.textSecondary}
                 value={values.destination_city}
-                onChangeText={handleChange('destination_city')}
-                onBlur={handleBlur('destination_city')}
+                onChangeText={(text) => {
+                  handleChange('destination_city')(text);
+                  filterCities(text, setDestinationSuggestions);
+                }}
+                onBlur={(e) => {
+                  handleBlur('destination_city')(e);
+                  setTimeout(() => setDestinationSuggestions([]), 200);
+                }}
+                onFocus={() => filterCities(values.destination_city, setDestinationSuggestions)}
               />
+              {destinationSuggestions.length > 0 && (
+                <View style={themedStyles.suggestionsContainer}>
+                  <ScrollView 
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {destinationSuggestions.map((item) => (
+                      <TouchableOpacity
+                        key={item}
+                        style={themedStyles.suggestionItem}
+                        onPress={() => handleCitySelect(item, 'destination_city', setFieldValue, setDestinationSuggestions)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={themedStyles.suggestionText}>
+                          {item}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           </View>
           {touched.destination_city && errors.destination_city && (
@@ -93,6 +219,7 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
+          {/* Date Field */}
           <View style={styles.formField}>
             <View style={styles.inputIconContainer}>
               <Calendar size={20} color={colors.primary} />
@@ -119,6 +246,7 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
+          {/* Passengers Field */}
           <View style={styles.formField}>
             <View style={styles.inputIconContainer}>
               <Users size={20} color={colors.primary} />
@@ -180,6 +308,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
+    position: 'relative',
   },
   inputIconContainer: {
     width: 40,
@@ -190,6 +319,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flex: 1,
     marginLeft: 8,
+    position: 'relative',
   },
   inputLabel: {
     fontFamily: 'Inter-Regular',
@@ -246,5 +376,5 @@ const styles = StyleSheet.create({
     marginTop: -8,
     marginBottom: 8,
     marginLeft: 48,
-  }
+  },
 });

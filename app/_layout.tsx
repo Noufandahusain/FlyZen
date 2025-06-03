@@ -7,6 +7,7 @@ import { Inter_400Regular, Inter_500Medium, Inter_700Bold } from '@expo-google-f
 import { Roboto_500Medium, Roboto_700Bold } from '@expo-google-fonts/roboto';
 import { SplashScreen } from 'expo-router';
 import { AuthProvider } from '@/context/AuthContext';
+import { ApiProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 
 // Prevent the splash screen from auto-hiding
@@ -36,14 +37,16 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" options={{ title: 'Not Found' }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </AuthProvider>
-    </ThemeProvider>
+    <AuthProvider>
+      <ApiProvider>
+        <ThemeProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="+not-found" options={{ title: 'Not Found' }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </ApiProvider>
+    </AuthProvider>
   );
 }
