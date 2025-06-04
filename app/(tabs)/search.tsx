@@ -31,6 +31,7 @@ export default function SearchScreen() {
     setLoading(true);
     setError(null);
     setSearched(true);
+    setLastSearchParams(searchParams);
     const { num_passengers, ...paramsWithoutPassengers } = searchParams;
 
     try {

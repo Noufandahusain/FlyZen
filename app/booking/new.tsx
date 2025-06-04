@@ -40,11 +40,18 @@ export default function NewBookingScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [numPassengers, setNumPassengers] = useState(Number(num_passengers) || 1);
-  const [passengerDetails, setPassengerDetails] = useState<PassengerDetail[]>([
-    { name: '', seat_preference: 'Window' },
-  ]);
-  const [fieldErrors, setFieldErrors] = useState<FieldError[]>([{}]);
+  const [numPassengers, setNumPassengers] = useState(() => {
+    const initialPassengers = Number(num_passengers) || 1;
+    return initialPassengers;
+  });
+  const [passengerDetails, setPassengerDetails] = useState<PassengerDetail[]>(() => {
+    const initialPassengers = Number(num_passengers) || 1;
+    return Array(initialPassengers).fill({ name: '', seat_preference: 'Window' });
+  });
+  const [fieldErrors, setFieldErrors] = useState<FieldError[]>(() => {
+    const initialPassengers = Number(num_passengers) || 1;
+    return Array(initialPassengers).fill({});
+  });
 
   useEffect(() => {
     if (flightString) {
